@@ -1,0 +1,1 @@
+from pythonvideoannotator_module_motioncounter.models.objects.object2d.motion_object2d import MotionObject2d as Object2d

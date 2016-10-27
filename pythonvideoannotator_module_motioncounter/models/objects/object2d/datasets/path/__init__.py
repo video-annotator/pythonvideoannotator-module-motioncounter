@@ -1,0 +1,1 @@
+from pythonvideoannotator_module_motioncounter.models.objects.object2d.datasets.path.motion_path import MotionPath as Path
