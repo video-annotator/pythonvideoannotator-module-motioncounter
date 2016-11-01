@@ -13,7 +13,7 @@ class Module(object):
 		self.motion_window = MotionCounter(self)
 
 		self.mainmenu[1]['Modules'].append(
-			{'Calculate the objects motion': self.motion_window.show },			
+			{'Motion': self.motion_window.show, 'icon':conf.ANNOTATOR_ICON_MOTION },			
 		)
 
 	def video_changed_evt(self):
@@ -40,3 +40,11 @@ class Module(object):
 	######################################################################################
 
 	
+	def save(self, data, project_path=None):
+		data = super(Module, self).save(data, project_path)
+		data['motion-settings'] = self.motion_window.save({})
+		return data
+
+	def load(self, data, project_path=None):
+		super(Module, self).load(data, project_path)
+		if 'motion-settings' in data: self.motion_window.load(data['motion-settings'])

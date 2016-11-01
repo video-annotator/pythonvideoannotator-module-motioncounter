@@ -22,8 +22,8 @@ class MotionPath(object):
 		if hasattr(self,'mainwindow'): self.mainwindow.motion_window.update_datasets()
 
 	def create_motion_tree_nodes(self):		
-		self.treenode_motion = self.tree.createChild('Motion', icon=conf.ANNOTATOR_ICON_PATH, parent=self.treenode )
-		variation_treenode 	 = self.tree.createChild('Variation', icon=conf.ANNOTATOR_ICON_VELOCITY, parent=self.treenode_motion )
+		self.treenode_motion = self.tree.createChild('motion', icon=conf.ANNOTATOR_ICON_MOTION, parent=self.treenode )
+		variation_treenode 	 = self.tree.createChild('variation', icon=conf.ANNOTATOR_ICON_VELOCITY, parent=self.treenode_motion )
 
 
 		self.tree.addPopupMenuOption(label='View on the timeline', functionAction=self.__send_motion_to_timeline_evt, item=self.treenode_motion, icon=conf.ANNOTATOR_ICON_TIMELINE)
@@ -32,14 +32,30 @@ class MotionPath(object):
 		self.treenode_motion.win = variation_treenode.win = self
 
 	def __send_motion_to_timeline_evt(self):
-		pass
+		data = [(i,self.get_motion(i)) for i in range(len(self)) if self.get_motion(i) is not None]
+		self.mainwindow.add_chart('{0} motion'.format(self.name), data)
 
 
 	def __send_motion_variation_to_timeline_evt(self):
-		pass
+		data = [(i,self.get_motion_variation(i)) for i in range(len(self)) if self.get_motion_variation(i) is not None]
+		self.mainwindow.add_chart('{0} motion variation'.format(self.name), data)
+
+	def get_motion_variation(self, index):
+		m1 = self.get_motion(index-1)
+		m2 = self.get_motion(index)
+		if m1 and m2: return m2-m1
+		else: return None
+
+	def get_motion(self, index):
+		if index<0 or index>=len(self._motion): None
+		return self._motion[index]
 
 	def set_motion(self, index, value):
-		self._path[index].motion = value
+		if not hasattr(self,'treenode_motion'): self.create_motion_tree_nodes()
+		
+		if index>=len(self._motion): 
+			for i in range(len(self._motion), index+1): self._motion.append(None)
+		self._motion[index] = value
 
 	def init(self):
 		self._last_img  	= None
@@ -47,11 +63,9 @@ class MotionPath(object):
 		
 
 	def process(self, index, frame):
-		if index>=len(self._path): return None
-		m = self._path[index]
-		if m is None: return None
+		pos = self.get_position(index)
+		if pos is None: return None
 
-		pos = m.position
 		x,y		= pos
 		cutx 	= int(round(x-self._radius))
 		cuty 	= int(round(y-self._radius))
@@ -79,19 +93,17 @@ class MotionPath(object):
 		self._absmotion.append( np.sum(diff) )
 
 		diff = np.float32(small_masked)-np.float32(self._last_img)
-		self._motion.append( np.sum(diff) )
+		self.set_motion(index, np.sum(diff) )
 		self._last_img 	= small_masked
 		
-		return self._motion[-1]
+		return self.get_motion(index)
 		
 
 
 	def draw_motion(self, index, frame, show_diff=True):
-		m = self._path[index]
-		if m is None: return
+		pos = self.get_position(index)
+		if pos is None: return None
 
-		pos = m.position
-		if pos is None: return
 		x,y		= pos
 		
 		if show_diff:
@@ -101,30 +113,16 @@ class MotionPath(object):
 			cv2.circle(frame, (x,y), self._radius, (0,0,255))
 
 
+	def get_csvrow(self, index): 
+		res = super(MotionPath, self).get_csvrow(index)
+		return res + [self.get_motion(index)]
 
-	def export_2_csv(self, path, fly_index, led, total_n_flies=1, data2save=None):
-		with open(os.path.join(path,'fly{0}_motion.csv'.format(self._name)), 'w') as csvfile:
-			if data2save: csvfile.write( ';'.join(map(str,data2save))+'\n')
-
-			self._events = sorted(self._events, key=lambda x: x)
-
-			csvfile.write( ';'.join(['Frame','Motion','Abs motion','Velocity','Acceleration','Position X','Position Y','Led','Collided']+['Fly {0}'.format(i) for i in range(total_n_flies)])+'\n')
-			for i, diff in enumerate(self._motion):
-				pos 	= self._positions[i]
-				vel 	= self._velocities[i]
-				acc 	= self._accels[i]
-				absdiff = self._absmotion[i]
-
-				collisions = map(int, self._collisions[i])
-				csvfile.write(';'.join(map(str,[i, diff, absdiff, vel, acc, pos[0], pos[1], led[i],int(sum(self._collisions[i])>0) ]+collisions))+'\n')
+	def load_csvrow(self, index, csvrow): 
+		super(MotionPath, self).load_csvrow(index, csvrow)
+		if len(csvrow)<4: return
+		self.set_motion(index, None if (csvrow[3] is None or len(csvrow[3])==0) else float(csvrow[3]) )
 
 
-		with open(os.path.join(path,'fly{0}_events.csv'.format(self._name)), 'w') as csvfile:
-			for i in range(fly_index):
-				csvfile.write(';'.join(map(str,['T','Fly {0}'.format(i),'#6464ff']))+'\n')
-
-			for i, (start,end,event) in enumerate(self._events):
-				csvfile.write(';'.join(map(str,['P',False,start,end,'Collided with Fly {0}'.format(event),'#6464ff',fly_index]))+'\n')
 
 
 	@property

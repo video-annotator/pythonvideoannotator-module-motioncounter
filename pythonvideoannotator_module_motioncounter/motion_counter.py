@@ -1,4 +1,5 @@
 import sys, os, shutil, re, pyforms, numpy as np, cv2
+from pysettings 		 import conf
 from pyforms 			 import BaseWidget
 from pyforms.Controls 	 import ControlFile
 from pyforms.Controls 	 import ControlPlayer
@@ -21,17 +22,19 @@ class MotionCounter(BaseWidget):
 		self.setMinimumHeight(300)
 		self.setMinimumWidth(500)
 
+		self._start 		= ControlNumber('Start on frame',0)
+		self._end 			= ControlNumber('End on frame', 10)
 		self._player			= ControlPlayer('Player')
 		self._objects 			= ControlCheckBoxList('Objects')
 		self._show_diff			= ControlCheckBox('Show diffs boxes')
 		self._threshold_slider	= ControlSlider('Threshold', 5, 1, 255)
 		self._radius_slider		= ControlSlider('Radius', 30, 1, 200)
-		self._apply  			= ControlButton('Apply')
+		self._apply  			= ControlButton('Apply', checkable=True)
 		self._progress  		= ControlProgress('Progress')
 
 		
 		self._formset = [
-			'_objects',
+			('_objects',['_start','_end']), 
 			'=',
 			('_threshold_slider', '_radius_slider', '_show_diff'),
 			'_player',
@@ -39,11 +42,15 @@ class MotionCounter(BaseWidget):
 			'_progress'
 		]
 
+		self.load_order = ['_start', '_end', '_threshold_slider', '_radius_slider', '_show_diff']
+
+
 		self._player.processFrame 	= self.__process_frame
 
 		self._threshold_slider.changed 	= self.__threshold_changed_event
 		self._radius_slider.changed 	= self.__radius_changed_event
 		self._apply.value 				= self.__apply_btn_evt
+		self._apply.icon 				= conf.ANNOTATOR_ICON_MOTION
 
 		self._progress.hide()
 
@@ -51,32 +58,59 @@ class MotionCounter(BaseWidget):
 		self._selected_objs = []
 
 	def __apply_btn_evt(self):
-		self._player.video_index = 0
-		cap = self._player.value
 
-		self._progress.value = 0
-		self._progress.max 	 = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-		self._progress.show()
+		if self._apply.checked:
+			self._start.enabled = False
+			self._end.enabled = False
+			self._objects.enabled = False
+			self._show_diff.enabled = False
+			self._threshold_slider.enabled = False
+			self._player.enabled = False
+			self._radius_slider.enabled = False
+			self._apply.label = 'Cancel'
 
-		for obj in self.objects: 
-			if not hasattr(obj, 'treenode_motion'): obj.create_motion_tree_nodes()
+			self._player.video_index = 0
+			cap = self._player.value
+
+
+
+			start = int(self._start.value)
+			end   = int(self._end.value)
+			self._progress.min = start
+			self._progress.max = end
+			self._progress.show()
+
+			cap.set(cv2.CAP_PROP_POS_FRAMES, start); 
+
+			for index in range(start, end+1):
+				res, frame = cap.read()
+				if not res: break
+				if not self._apply.checked: break
+
+				index = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+				for obj in self.objects:
+					motion = obj.process(index, frame)
+					if motion is not None: obj.set_motion(index, motion)
+				self._progress.value = index
 		
-		while True:
-			res, frame = cap.read()
-			if not res: break
-
-			index = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-			for obj in self.objects:
-				motion = obj.process(index, frame)
-				if motion is not None: obj.set_motion(index, motion)
-			self._progress.value = index
-	
-		self._progress.hide()
+			self._start.enabled = True
+			self._end.enabled = True
+			self._objects.enabled = True
+			self._show_diff.enabled = True
+			self._threshold_slider.enabled = True
+			self._player.enabled = True
+			self._radius_slider.enabled = True
+			self._apply.label = 'Apply'
+			self._apply.checked = False
+			self._progress.hide()
 
 	@property
 	def video_filename(self): return None
 	@video_filename.setter
-	def video_filename(self, value): self._player.value = value
+	def video_filename(self, value): 
+		self._player.value = value
+		self._start.max = self._player.max
+		self._end.max = self._player.max
 
 	@property
 	def objects(self): return self._objects.value
