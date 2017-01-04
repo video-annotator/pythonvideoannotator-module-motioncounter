@@ -11,12 +11,12 @@ from pyforms.Controls 	 import ControlText
 from pyforms.Controls 	 import ControlCheckBoxList
 from pyforms.Controls 	 import ControlProgress
 from PyQt4 import QtGui
-from pythonvideoannotator.models.objects.object2d.datasets.path import Path
+from pythonvideoannotator_models.models.video.objects.object2d.datasets.path import Path
 
 class MotionCounter(BaseWidget):
 
 	def __init__(self, parent=None):
-		BaseWidget.__init__(self, 'Motion counter', parentWindow=parent)
+		BaseWidget.__init__(self, 'Motion counter', parent_win=parent)
 
 		self.layout().setContentsMargins(10, 5, 10, 5)
 		self.setMinimumHeight(300)
@@ -47,9 +47,9 @@ class MotionCounter(BaseWidget):
 
 		self._player.processFrame 	= self.__process_frame
 
-		self._threshold_slider.changed 	= self.__threshold_changed_event
-		self._radius_slider.changed 	= self.__radius_changed_event
-		self._apply.value 				= self.__apply_btn_evt
+		self._threshold_slider.changed_event 	= self.__threshold_changed_event
+		self._radius_slider.changed_event 	= self.__radius_changed_event
+		self._apply.value 				= self.__apply_btn_event
 		self._apply.icon 				= conf.ANNOTATOR_ICON_MOTION
 
 		self._progress.hide()
@@ -57,7 +57,7 @@ class MotionCounter(BaseWidget):
 		self._objects_list  = []
 		self._selected_objs = []
 
-	def __apply_btn_evt(self):
+	def __apply_btn_event(self):
 
 		if self._apply.checked:
 			self._start.enabled = False
@@ -118,16 +118,16 @@ class MotionCounter(BaseWidget):
 	def objects(self, value):  self._objects.value = value
 	
 
-	def add_dataset_evt(self, dataset):
+	def add_dataset_event(self, dataset):
 		if isinstance(dataset, Path):
 			self._objects += [dataset, True]
 			#self._objects_list.append(dataset)
 
-	def remove_dataset_evt(self, dataset):
+	def removed_dataset_event(self, dataset):
 		if isinstance(dataset, Path):
 			self._objects -= dataset
 
-	def remove_object_evt(self, obj):
+	def removed_object_event(self, obj):
 		items2remove = []
 		for i, (item, checked) in enumerate(self._objects.items):
 			if item.object2d==obj: items2remove.append(i)
@@ -169,6 +169,6 @@ class MotionCounter(BaseWidget):
 		for f in self.objects: f.threshold = value
 
 
-
+	
 
 if __name__ == "__main__": pyforms.startApp(Main)

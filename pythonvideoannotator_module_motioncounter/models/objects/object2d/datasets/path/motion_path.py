@@ -22,23 +22,23 @@ class MotionPath(object):
 		if hasattr(self,'mainwindow'): self.mainwindow.motion_window.update_datasets()
 
 	def create_motion_tree_nodes(self):		
-		self.treenode_motion = self.tree.createChild('motion', icon=conf.ANNOTATOR_ICON_MOTION, parent=self.treenode )
-		variation_treenode 	 = self.tree.createChild('variation', icon=conf.ANNOTATOR_ICON_VELOCITY, parent=self.treenode_motion )
+		self.treenode_motion = self.tree.create_child('motion', icon=conf.ANNOTATOR_ICON_MOTION, parent=self.treenode )
+		variation_treenode 	 = self.tree.create_child('variation', icon=conf.ANNOTATOR_ICON_VELOCITY, parent=self.treenode_motion )
 
 
-		self.tree.addPopupMenuOption(label='View on the timeline', functionAction=self.__send_motion_to_timeline_evt, item=self.treenode_motion, icon=conf.ANNOTATOR_ICON_TIMELINE)
-		self.tree.addPopupMenuOption(label='View on the timeline', functionAction=self.__send_motion_variation_to_timeline_evt, item=variation_treenode, icon=conf.ANNOTATOR_ICON_TIMELINE)
+		self.tree.add_popup_menu_option(label='View on the timeline', function_action=self.__send_motion_to_timeline_event, item=self.treenode_motion, icon=conf.ANNOTATOR_ICON_TIMELINE)
+		self.tree.add_popup_menu_option(label='View on the timeline', function_action=self.__send_motion_variation_to_timeline_event, item=variation_treenode, icon=conf.ANNOTATOR_ICON_TIMELINE)
 		
 		self.treenode_motion.win = variation_treenode.win = self
 
-	def __send_motion_to_timeline_evt(self):
+	def __send_motion_to_timeline_event(self):
 		data = [(i,self.get_motion(i)) for i in range(len(self)) if self.get_motion(i) is not None]
-		self.mainwindow.add_chart('{0} motion'.format(self.name), data)
+		self.mainwindow.add_graph('{0} motion'.format(self.name), data)
 
 
-	def __send_motion_variation_to_timeline_evt(self):
+	def __send_motion_variation_to_timeline_event(self):
 		data = [(i,self.get_motion_variation(i)) for i in range(len(self)) if self.get_motion_variation(i) is not None]
-		self.mainwindow.add_chart('{0} motion variation'.format(self.name), data)
+		self.mainwindow.add_graph('{0} motion variation'.format(self.name), data)
 
 	def get_motion_variation(self, index):
 		m1 = self.get_motion(index-1)
@@ -47,7 +47,7 @@ class MotionPath(object):
 		else: return None
 
 	def get_motion(self, index):
-		if index<0 or index>=len(self._motion): None
+		if index<0 or index>=len(self._motion): return None
 		return self._motion[index]
 
 	def set_motion(self, index, value):
@@ -119,8 +119,8 @@ class MotionPath(object):
 
 	def load_csvrow(self, index, csvrow): 
 		super(MotionPath, self).load_csvrow(index, csvrow)
-		if len(csvrow)<4: return
-		self.set_motion(index, None if (csvrow[3] is None or len(csvrow[3])==0) else float(csvrow[3]) )
+		if len(csvrow)<5: return
+		self.set_motion(index, None if (csvrow[3] is None or len(csvrow[3])==0 or csvrow[3]=='None') else float(csvrow[3]) )
 
 
 

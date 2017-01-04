@@ -16,23 +16,23 @@ class Module(object):
 			{'Motion': self.motion_window.show, 'icon':conf.ANNOTATOR_ICON_MOTION },			
 		)
 
-	def video_changed_evt(self):
-		super(Module, self).video_changed_evt()
+	def video_changed_event(self):
+		super(Module, self).video_changed_event()
 		self.motion_window.video_filename = self._video.value
 
 
 
-	def add_dataset_evt(self, dataset):
-		super(Module, self).add_dataset_evt(dataset)
-		self.motion_window.add_dataset_evt(dataset)
+	def add_dataset_event(self, dataset):
+		super(Module, self).add_dataset_event(dataset)
+		self.motion_window.add_dataset_event(dataset)
 
-	def remove_dataset_evt(self, dataset):
-		super(Module, self).remove_dataset_evt(dataset)
-		self.motion_window.remove_dataset_evt(dataset)
+	def removed_dataset_event(self, dataset):
+		super(Module, self).removed_dataset_event(dataset)
+		self.motion_window.removed_dataset_event(dataset)
 
-	def remove_object_evt(self, obj):
-		super(Module, self).remove_object_evt(obj)
-		self.motion_window.remove_object_evt(obj)
+	def removed_object_event(self, obj):
+		super(Module, self).removed_object_event(obj)
+		self.motion_window.removed_object_event(obj)
 
 
 	######################################################################################
