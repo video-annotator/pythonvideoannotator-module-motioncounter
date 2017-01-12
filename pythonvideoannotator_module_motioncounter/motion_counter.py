@@ -9,9 +9,14 @@ from pyforms.Controls 	 import ControlSlider
 from pyforms.Controls 	 import ControlCheckBox
 from pyforms.Controls 	 import ControlText
 from pyforms.Controls 	 import ControlCheckBoxList
+from pyforms.Controls 	 import ControlEmptyWidget
 from pyforms.Controls 	 import ControlProgress
 from PyQt4 import QtGui
-from pythonvideoannotator_models.models.video.objects.object2d.datasets.path import Path
+
+from pythonvideoannotator_models_gui.dialogs import DatasetsDialog
+
+from pythonvideoannotator_models_gui.models.video.objects.object2d.datasets.contours import Contours
+from pythonvideoannotator_models_gui.models.video.objects.object2d.datasets.path import Path
 
 class MotionCounter(BaseWidget):
 
@@ -22,153 +27,174 @@ class MotionCounter(BaseWidget):
 		self.setMinimumHeight(300)
 		self.setMinimumWidth(500)
 
-		self._start 		= ControlNumber('Start on frame',0)
-		self._end 			= ControlNumber('End on frame', 10)
-		self._player			= ControlPlayer('Player')
-		self._objects 			= ControlCheckBoxList('Objects')
-		self._show_diff			= ControlCheckBox('Show diffs boxes')
-		self._threshold_slider	= ControlSlider('Threshold', 5, 1, 255)
-		self._radius_slider		= ControlSlider('Radius', 30, 1, 200)
-		self._apply  			= ControlButton('Apply', checkable=True)
-		self._progress  		= ControlProgress('Progress')
+		self._player	= ControlPlayer('Player')
+		self._datasets 	= ControlEmptyWidget('Objects', DatasetsDialog() )
+		self._show_diff	= ControlCheckBox('Show diffs boxes')
+		self._threshold	= ControlSlider('Threshold', 5, 1, 255)
+		self._radius	= ControlSlider('Radius', 30, 1, 200)
+		self._apply  	= ControlButton('Apply', checkable=True)
+		self._progress 	= ControlProgress('Progress')
 
 		
 		self._formset = [
-			('_objects',['_start','_end']), 
+			'_datasets', 
 			'=',
-			('_threshold_slider', '_radius_slider', '_show_diff'),
+			('_threshold', '_radius', '_show_diff'),
 			'_player',
 			'_apply',
 			'_progress'
 		]
 
-		self.load_order = ['_start', '_end', '_threshold_slider', '_radius_slider', '_show_diff']
+		self.load_order = ['_threshold', '_radius', '_show_diff']
 
-
-		self._player.processFrame 	= self.__process_frame
-
-		self._threshold_slider.changed_event 	= self.__threshold_changed_event
-		self._radius_slider.changed_event 	= self.__radius_changed_event
-		self._apply.value 				= self.__apply_btn_event
-		self._apply.icon 				= conf.ANNOTATOR_ICON_MOTION
-
+		self._datasets.value.datasets_filter   				= lambda x: isinstance(x, (Contours, Path) )
+		self._player.process_frame_event 					= self.__process_frame_event
+		self._datasets.value.video_selection_changed_event 	= self.__video_selection_changed_event
+		
+		self._apply.value 		= self.__apply_btn_event
+		self._apply.icon 		= conf.ANNOTATOR_ICON_MOTION
 		self._progress.hide()
 
-		self._objects_list  = []
-		self._selected_objs = []
+	###########################################################################
+	### EVENTS ################################################################
+	###########################################################################
 
+	def __video_selection_changed_event(self):
+		video = self._datasets.value.selected_video
+		if video is not None: self._player.value = video.video_capture
+
+	def __process_frame_event(self, frame):
+		index 			= self._player.video_index
+		selected_video 	= self._datasets.value.selected_video
+		radius 			= self._radius.value
+		threshold 		= self._threshold.value
+
+		show_diff 		= self._show_diff.value
+
+		if show_diff:
+			circular_mask = np.zeros( (radius*2, radius*2), dtype=np.uint8 )
+			cv2.circle(circular_mask, (radius, radius), radius, 255, -1 )
+			
+		for video, (begin, end), datasets in self._datasets.value.selected_data:
+			if video != selected_video: continue
+
+			for dataset in datasets:
+				pos = dataset.get_position(index)
+				if pos is None: continue
+
+				if show_diff:
+					x,y	  = pos
+					cutx  = int(round(x-radius))
+					cuty  = int(round(y-radius))
+					cutxx = int(round(x+radius))
+					cutyy = int(round(y+radius))
+					if cutx<0: cutx=0; cutxx = radius*2
+					if cuty<0: cuty=0; cutyy = radius*2
+
+					small 		 = frame[cuty:cutyy, cutx:cutxx].copy()
+					small_gray   = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+					small_masked = cv2.bitwise_and(circular_mask, small_gray)
+
+					if 	not hasattr(self, '_last_small_masked') or \
+						self._last_small_masked==None or \
+						self._last_small_masked.shape[0]*self._last_small_masked.shape[1]!=small_masked.shape[0]*small_masked.shape[1]: 
+						self._last_small_masked = small_masked
+
+					diff = cv2.absdiff(small_masked, self._last_small_masked)
+					diff[diff<threshold]  = 0
+					diff[diff>=threshold] = 255
+
+					cv2.circle(frame, pos, radius, (0,0,0), -1)
+					frame[y-radius:y+radius, x-radius:x+radius] += cv2.merge( (diff, diff, diff) )
+				else:
+					cv2.circle(frame, pos, radius, (0,0,255), 2)
+		return frame
+			
 	def __apply_btn_event(self):
 
 		if self._apply.checked:
-			self._start.enabled = False
-			self._end.enabled = False
-			self._objects.enabled = False
+			self._datasets.enabled 	= False
 			self._show_diff.enabled = False
-			self._threshold_slider.enabled = False
-			self._player.enabled = False
-			self._radius_slider.enabled = False
-			self._apply.label = 'Cancel'
+			self._threshold.enabled = False
+			self._player.enabled 	= False
+			self._radius.enabled 	= False
+			self._player.stop()
+			self._apply.label 		= 'Cancel'
 
-			self._player.video_index = 0
-			cap = self._player.value
+			total_2_analyse  = 0
+			for video, (begin, end), datasets in self._datasets.value.selected_data:
+				total_2_analyse += end-begin+1
 
-
-
-			start = int(self._start.value)
-			end   = int(self._end.value)
-			self._progress.min = start
-			self._progress.max = end
+			self._progress.min = 0
+			self._progress.max = total_2_analyse
 			self._progress.show()
 
-			cap.set(cv2.CAP_PROP_POS_FRAMES, start); 
+			radius    = self._radius.value
+			threshold = self._threshold.value
+			circular_mask = np.zeros( (radius*2, radius*2), dtype=np.uint8 )
+			cv2.circle(circular_mask, (radius, radius), radius, 255, -1 )
+			
 
-			for index in range(start, end+1):
-				res, frame = cap.read()
-				if not res: break
-				if not self._apply.checked: break
+			count = 0
+			for video, (begin, end), datasets in self._datasets.value.selected_data:
+				begin = int(begin)
+				end = int(end)+1
 
-				index = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
-				for obj in self.objects:
-					motion = obj.process(index, frame)
-					if motion is not None: obj.set_motion(index, motion)
-				self._progress.value = index
+				capture = cv2.VideoCapture(video.filepath)
+				capture.set(cv2.CAP_PROP_POS_FRAMES, begin)
+
+				last_small_masked = [None for x in datasets]
+
+				for index in range(begin, end):
+					res, frame = capture.read()
+					if not res: break
+					if not self._apply.checked: break
+
+					for dataset_index, dataset in enumerate(datasets):
+						pos = dataset.get_position(index)
+						if pos is None: continue
+
+						x,y	  = pos
+						cutx  = int(round(x-radius))
+						cuty  = int(round(y-radius))
+						cutxx = int(round(x+radius))
+						cutyy = int(round(y+radius))
+						if cutx<0: cutx=0; cutxx = radius*2
+						if cuty<0: cuty=0; cutyy = radius*2
+
+						small 		 = frame[cuty:cutyy, cutx:cutxx].copy()
+						small_gray   = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+						small_masked = cv2.bitwise_and(circular_mask, small_gray)
+
+						if last_small_masked[dataset_index]==None: last_small_masked[dataset_index] = small_masked
+
+						diff = cv2.absdiff(small_masked, last_small_masked[dataset_index])
+						diff[diff<threshold]  = 0
+						diff[diff>=threshold] = 1
+
+						motion = np.sum(diff)
+						dataset.set_motion(index, motion)
+
+					self._progress.value = count
+					count += 1
 		
-			self._start.enabled = True
-			self._end.enabled = True
-			self._objects.enabled = True
+			self._datasets.enabled 	= True
 			self._show_diff.enabled = True
-			self._threshold_slider.enabled = True
-			self._player.enabled = True
-			self._radius_slider.enabled = True
-			self._apply.label = 'Apply'
-			self._apply.checked = False
+			self._threshold.enabled = True
+			self._player.enabled 	= True
+			self._radius.enabled 	= True
+			self._apply.label 		= 'Apply'
+			self._apply.checked 	= False
 			self._progress.hide()
 
-	@property
-	def video_filename(self): return None
-	@video_filename.setter
-	def video_filename(self, value): 
-		self._player.value = value
-		self._start.max = self._player.max
-		self._end.max = self._player.max
 
-	@property
-	def objects(self): return self._objects.value
-	@objects.setter
-	def objects(self, value):  self._objects.value = value
 	
 
-	def add_dataset_event(self, dataset):
-		if isinstance(dataset, Path):
-			self._objects += [dataset, True]
-			#self._objects_list.append(dataset)
-
-	def removed_dataset_event(self, dataset):
-		if isinstance(dataset, Path):
-			self._objects -= dataset
-
-	def removed_object_event(self, obj):
-		items2remove = []
-		for i, (item, checked) in enumerate(self._objects.items):
-			if item.object2d==obj: items2remove.append(i)
-		for i in sorted(items2remove,reverse=True): self._objects -= i
-
-
-	###########################################################################
-	### AUX FUNCTIONS #########################################################
-	###########################################################################
-
-	def update_datasets(self):
-		items = self._objects.items
-		self._objects.clear()
-		self._objects.value = items
 	
-		
 
-	def __process_frame(self, frame):
-		index = self._player.video_index
-		
-		for obj in self.objects: obj.process(index, frame)
-		for obj in self.objects: obj.draw_motion(index, frame, self._show_diff.value)
 
-		return frame
-
-	def __threshold_changed_event(self): self.threshold = self._threshold_slider.value
-	def __radius_changed_event(self): 	 self.radius = self._radius_slider.value
-
-	@property
-	def radius(self): return self._radius_slider.value
-	@radius.setter
-	def radius(self, value): 
-		for f in self.objects: f.radius = value
-
-	@property
-	def threshold(self): return self._threshold_slider.value
-	@threshold.setter
-	def threshold(self, value): 
-		for f in self.objects: f.threshold = value
 
 
 	
 
-if __name__ == "__main__": pyforms.startApp(Main)
+if __name__ == "__main__": pyforms.start_app(MotionCounter)
