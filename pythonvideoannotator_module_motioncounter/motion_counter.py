@@ -64,7 +64,7 @@ class MotionCounter(BaseWidget):
 		if video is not None: self._player.value = video.video_capture
 
 	def __process_frame_event(self, frame):
-		index 			= self._player.video_index
+		index 			= self._player.video_index-1
 		selected_video 	= self._datasets.value.selected_video
 		radius 			= self._radius.value
 		threshold 		= self._threshold.value
