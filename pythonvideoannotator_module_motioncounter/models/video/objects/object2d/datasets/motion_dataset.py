@@ -31,12 +31,12 @@ class MotionDataset(object):
 
 		motion_file = os.path.join(dataset_path, 'motion.csv')
 		with open(motion_file, 'wb') as outfile:
-			outfile.write(';'.join(['frame','motion'])+'\n' )
+			outfile.write((';'.join(['frame','motion'])+'\n' ).encode( ))
 			for index in range(len(self)):
 				motion = self.get_motion(index)
 				row = [index] + [motion]
-				outfile.write(';'.join( map(str,row) ))
-				outfile.write('\n')
+				outfile.write((';'.join( map(str,row) )).encode( ))
+				outfile.write(b'\n'))
 
 		return data
 

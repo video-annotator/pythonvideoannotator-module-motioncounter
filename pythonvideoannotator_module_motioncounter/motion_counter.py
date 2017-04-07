@@ -11,7 +11,6 @@ from pyforms.Controls 	 import ControlText
 from pyforms.Controls 	 import ControlCheckBoxList
 from pyforms.Controls 	 import ControlEmptyWidget
 from pyforms.Controls 	 import ControlProgress
-from PyQt4 import QtGui
 
 from pythonvideoannotator_models_gui.dialogs import DatasetsDialog
 
@@ -23,7 +22,10 @@ class MotionCounter(BaseWidget):
 	def __init__(self, parent=None):
 		BaseWidget.__init__(self, 'Motion counter', parent_win=parent)
 
-		self.layout().setContentsMargins(10, 5, 10, 5)
+		if conf.PYFORMS_USE_QT5:
+			self.layout().setContentsMargins(5,5,5,5)
+		else:
+			self.layout().setMargin(5)
 		self.setMinimumHeight(300)
 		self.setMinimumWidth(500)
 
