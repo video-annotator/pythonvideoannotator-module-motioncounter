@@ -36,7 +36,7 @@ class MotionDataset(object):
 				motion = self.get_motion(index)
 				row = [index] + [motion]
 				outfile.write((';'.join( map(str,row) )).encode( ))
-				outfile.write(b'\n'))
+				outfile.write(b'\n')
 
 		return data
 
