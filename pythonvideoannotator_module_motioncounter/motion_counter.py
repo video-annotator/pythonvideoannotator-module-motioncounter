@@ -11,11 +11,14 @@ from pyforms.Controls 	 import ControlText
 from pyforms.Controls 	 import ControlCheckBoxList
 from pyforms.Controls 	 import ControlEmptyWidget
 from pyforms.Controls 	 import ControlProgress
+from pyforms.Controls 	 import ControlCombo
 
 from pythonvideoannotator_models_gui.dialogs import DatasetsDialog
+from pythonvideoannotator_models_gui.dialogs import ObjectsDialog
 
 from pythonvideoannotator_models_gui.models.video.objects.object2d.datasets.contours import Contours
 from pythonvideoannotator_models_gui.models.video.objects.object2d.datasets.path import Path
+from pythonvideoannotator_models_gui.models.video.objects.image import Image
 
 class MotionCounter(BaseWidget):
 
@@ -30,36 +33,63 @@ class MotionCounter(BaseWidget):
 		self.setMinimumWidth(500)
 
 		self._player	= ControlPlayer('Player')
-		self._datasets 	= ControlEmptyWidget('Objects', DatasetsDialog() )
+		self._datasets 	= ControlEmptyWidget('Paths', 			DatasetsDialog() )
+		self._backgrounds = ControlEmptyWidget('Backgrounds', 	ObjectsDialog()  )
 		self._show_diff	= ControlCheckBox('Show diffs boxes')
 		self._threshold	= ControlSlider('Threshold', 5, 1, 255)
 		self._radius	= ControlSlider('Radius', 30, 1, 200)
 		self._apply  	= ControlButton('Apply', checkable=True)
+		self._compare  	= ControlCombo('Compare with')
 		self._progress 	= ControlProgress('Progress')
 
 		
 		self._formset = [
-			'_datasets', 
+			'_datasets',
 			'=',
+			'_compare',
+			'_backgrounds',
 			('_threshold', '_radius', '_show_diff'),
 			'_player',
 			'_apply',
 			'_progress'
 		]
 
+		self._compare.add_item('Last frame', 1)
+		self._compare.add_item('First frame', 2)
+		self._compare.add_item('Background image', 3)
+
 		self.load_order = ['_threshold', '_radius', '_show_diff']
 
+		self._backgrounds.value.datasets_filter   			= lambda x: isinstance(x, Image )
 		self._datasets.value.datasets_filter   				= lambda x: isinstance(x, (Contours, Path) )
 		self._player.process_frame_event 					= self.__process_frame_event
 		self._datasets.value.video_selection_changed_event 	= self.__video_selection_changed_event
 		
+		self._compare.changed_event = self.__compare_changed_event
+
 		self._apply.value 		= self.__apply_btn_event
 		self._apply.icon 		= conf.ANNOTATOR_ICON_MOTION
+		
 		self._progress.hide()
+		self._backgrounds.hide()
 
 	###########################################################################
 	### EVENTS ################################################################
 	###########################################################################
+
+	def __compare_changed_event(self):
+		if self._compare.value==1:
+			self._backgrounds.hide()
+
+		elif self._compare.value==2:
+			self._backgrounds.hide()
+
+		elif self._compare.value==3:
+			self._backgrounds.show()
+
+		self._lastframe = None
+		
+
 
 	def __video_selection_changed_event(self):
 		video = self._datasets.value.selected_video
@@ -76,7 +106,15 @@ class MotionCounter(BaseWidget):
 		if show_diff:
 			circular_mask = np.zeros( (radius*2, radius*2), dtype=np.uint8 )
 			cv2.circle(circular_mask, (radius, radius), radius, 255, -1 )
-			
+
+		compare_with = self._compare.value
+		if compare_with==3 and len(self._backgrounds.value.objects):
+			background_img = self._backgrounds.value.objects[0].image
+			background_img = cv2.cvtColor(background_img, cv2.COLOR_BGR2GRAY)
+		else:
+			background_img  = None
+
+
 		for video, (begin, end), datasets in self._datasets.value.selected_data:
 			if video != selected_video: continue
 
@@ -85,6 +123,7 @@ class MotionCounter(BaseWidget):
 				if pos is None: continue
 
 				if show_diff:
+					# calculate the cut
 					x,y	  = pos
 					cutx  = int(round(x-radius))
 					cuty  = int(round(y-radius))
@@ -93,21 +132,28 @@ class MotionCounter(BaseWidget):
 					if cutx<0: cutx=0; cutxx = radius*2
 					if cuty<0: cuty=0; cutyy = radius*2
 
-					small 		 = frame[cuty:cutyy, cutx:cutxx].copy()
-					small_gray   = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-					small_masked = cv2.bitwise_and(circular_mask, small_gray)
+					gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-					if 	not hasattr(self, '_last_small_masked') or \
-						self._last_small_masked==None or \
-						self._last_small_masked.shape[0]*self._last_small_masked.shape[1]!=small_masked.shape[0]*small_masked.shape[1]: 
-						self._last_small_masked = small_masked
+					small 		 = gray[cuty:cutyy, cutx:cutxx].copy()
+					small_masked = cv2.bitwise_and(circular_mask, small)
+					
+					if not hasattr(self, '_lastframe') or type(self._lastframe) is not np.ndarray:
+						if self._compare.value==1 or self._compare.value==2:
+							self._lastframe = gray							
+						elif self._compare.value==3:
+							self._lastframe = background_img
+						
+					if type(self._lastframe) is np.ndarray:
+						last_masked = cv2.bitwise_and(circular_mask, self._lastframe[cuty:cutyy, cutx:cutxx])	
 
-					diff = cv2.absdiff(small_masked, self._last_small_masked)
-					diff[diff<threshold]  = 0
-					diff[diff>=threshold] = 255
+						diff = cv2.absdiff(small_masked, last_masked)
+						diff[diff<threshold]  = 0
+						diff[diff>=threshold] = 255
 
-					cv2.circle(frame, pos, radius, (0,0,0), -1)
-					frame[y-radius:y+radius, x-radius:x+radius] += cv2.merge( (diff, diff, diff) )
+						cv2.circle(frame, pos, radius, (0,0,0), -1)
+						frame[y-radius:y+radius, x-radius:x+radius] += cv2.merge( (diff, diff, diff) )
+
+					if self._compare.value==1: self._lastframe = gray
 				else:
 					cv2.circle(frame, pos, radius, (0,0,255), 2)
 		return frame
@@ -145,7 +191,14 @@ class MotionCounter(BaseWidget):
 				capture = cv2.VideoCapture(video.filepath)
 				capture.set(cv2.CAP_PROP_POS_FRAMES, begin)
 
-				last_small_masked = [None for x in datasets]
+				last_image = [None for x in datasets]
+
+				compare_with = self._compare.value
+				if compare_with==3 and len(self._backgrounds.value.objects):
+					background_img = self._backgrounds.value.objects[0].image
+					background_img = cv2.cvtColor(background_img, cv2.COLOR_BGR2GRAY)
+				else:
+					background_img  = None
 
 				for index in range(begin, end):
 					res, frame = capture.read()
@@ -164,18 +217,30 @@ class MotionCounter(BaseWidget):
 						if cutx<0: cutx=0; cutxx = radius*2
 						if cuty<0: cuty=0; cutyy = radius*2
 
-						small 		 = frame[cuty:cutyy, cutx:cutxx].copy()
-						small_gray   = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-						small_masked = cv2.bitwise_and(circular_mask, small_gray)
+						gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-						if last_small_masked[dataset_index]==None: last_small_masked[dataset_index] = small_masked
+						small 		 = gray[cuty:cutyy, cutx:cutxx].copy()
+						small_masked = cv2.bitwise_and(circular_mask, small)
 
-						diff = cv2.absdiff(small_masked, last_small_masked[dataset_index])
-						diff[diff<threshold]  = 0
+						if type(last_image[dataset_index]) is not np.ndarray: 
+							last_image[dataset_index]  	  = small_masked
+							if compare_with==1 or compare_with==2:
+								last_image[dataset_index] = gray
+							elif compare_with==3:
+								last_image[dataset_index] = background_img
+
+						segment 	= last_image[dataset_index]
+						last_masked = cv2.bitwise_and(circular_mask, segment[cuty:cutyy, cutx:cutxx] )	
+
+						diff = cv2.absdiff(small_masked, last_masked)
+						diff[diff< threshold]  = 0
 						diff[diff>=threshold] = 1
 
 						motion = np.sum(diff)
 						dataset.set_motion(index, motion)
+
+						if compare_with==1: 
+							last_image[dataset_index] = gray
 
 					self._progress.value = count
 					count += 1
