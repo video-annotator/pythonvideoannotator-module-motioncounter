@@ -1,5 +1,5 @@
 import csv, cv2, os, numpy as np
-from pysettings import conf
+from pyforms import conf
 
 class MotionDataset(object):
 
