@@ -22,19 +22,6 @@ class Module(object):
 
 
 
-	def add_dataset_event(self, dataset):
-		super(Module, self).add_dataset_event(dataset)
-		self.motion_window.add_dataset_event(dataset)
-
-	def removed_dataset_event(self, dataset):
-		super(Module, self).removed_dataset_event(dataset)
-		self.motion_window.removed_dataset_event(dataset)
-
-	def removed_object_event(self, obj):
-		super(Module, self).removed_object_event(obj)
-		self.motion_window.removed_object_event(obj)
-
-
 	######################################################################################
 	#### IO FUNCTIONS ####################################################################
 	######################################################################################
