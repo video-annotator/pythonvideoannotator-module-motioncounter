@@ -192,11 +192,16 @@ class MotionCounter(BaseWidget):
 				last_image = [None for x in datasets]
 
 				compare_with = self._compare.value
-				if compare_with==3 and len(self._backgrounds.value.objects):
-					background_img = self._backgrounds.value.objects[0].image
-					background_img = cv2.cvtColor(background_img, cv2.COLOR_BGR2GRAY)
+				if compare_with==3:
+					if len(self._backgrounds.value.objects):
+						background_img = self._backgrounds.value.objects[0].image
+						background_img = cv2.cvtColor(background_img, cv2.COLOR_BGR2GRAY)
+					else:
+						self.critical('No background selected')
+						break
 				else:
 					background_img  = None
+
 
 				for index in range(begin, end):
 					res, frame = capture.read()
