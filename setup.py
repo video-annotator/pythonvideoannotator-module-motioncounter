@@ -6,7 +6,7 @@ import re
 
 setup(
 	name='Python video annotator - module - motion counter',
-	version=0.0.1,
+	version="0.0.1",
 	description="""""",
 	author=['Ricardo Ribeiro'],
 	author_email='ricardojvr@gmail.com',
