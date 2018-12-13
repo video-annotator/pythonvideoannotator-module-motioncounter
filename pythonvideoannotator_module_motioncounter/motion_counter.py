@@ -101,17 +101,12 @@ class MotionCounter(BaseWidget):
 
 		show_diff 		= self._show_diff.value
 
-		if show_diff:
-			circular_mask = np.zeros( (radius*2, radius*2), dtype=np.uint8 )
-			cv2.circle(circular_mask, (radius, radius), radius, 255, -1 )
-
 		compare_with = self._compare.value
 		if compare_with==3 and len(self._backgrounds.value.objects):
 			background_img = self._backgrounds.value.objects[0].image
 			background_img = cv2.cvtColor(background_img, cv2.COLOR_BGR2GRAY)
 		else:
 			background_img  = None
-
 
 		for video, (begin, end), datasets in self._datasets.value.selected_data:
 			if video != selected_video: continue
@@ -127,12 +122,22 @@ class MotionCounter(BaseWidget):
 					cuty  = int(round(y-radius))
 					cutxx = int(round(x+radius))
 					cutyy = int(round(y+radius))
-					if cutx<0: cutx=0; cutxx = radius*2
-					if cuty<0: cuty=0; cutyy = radius*2
+					if cutx<0: 
+						cutx=0
+					if cutxx>frame.shape[1]: 
+						cutxx = frame.shape[1]
+					if cuty<0: 
+						cuty=0
+					if cutyy>frame.shape[0]: 
+						cutyy = frame.shape[0]
 
 					gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 					small 		 = gray[cuty:cutyy, cutx:cutxx].copy()
+
+					circular_mask = np.zeros( (cutyy-cuty, cutxx-cutx), dtype=np.uint8 )
+					cv2.circle(circular_mask, (cutyy-cuty, cutxx-cutx), radius, 255, -1 )
+
 					small_masked = cv2.bitwise_and(circular_mask, small)
 					
 					if not hasattr(self, '_lastframe') or type(self._lastframe) is not np.ndarray:
@@ -145,11 +150,10 @@ class MotionCounter(BaseWidget):
 						last_masked = cv2.bitwise_and(circular_mask, self._lastframe[cuty:cutyy, cutx:cutxx])	
 
 						diff = cv2.absdiff(small_masked, last_masked)
-						diff[diff<threshold]  = 0
-						diff[diff>=threshold] = 255
 
 						cv2.circle(frame, pos, radius, (0,0,0), -1)
-						frame[y-radius:y+radius, x-radius:x+radius] += cv2.merge( (diff, diff, diff) )
+
+						frame[cuty:cutyy, cutx:cutxx] += cv2.merge( (diff, diff, diff) )
 
 					if self._compare.value==1: self._lastframe = gray
 				else:
@@ -177,9 +181,6 @@ class MotionCounter(BaseWidget):
 
 			radius    = self._radius.value
 			threshold = self._threshold.value
-			circular_mask = np.zeros( (radius*2, radius*2), dtype=np.uint8 )
-			cv2.circle(circular_mask, (radius, radius), radius, 255, -1 )
-			
 
 			count = 0
 			for video, (begin, end), datasets in self._datasets.value.selected_data:
@@ -217,13 +218,23 @@ class MotionCounter(BaseWidget):
 						cuty  = int(round(y-radius))
 						cutxx = int(round(x+radius))
 						cutyy = int(round(y+radius))
-						if cutx<0: cutx=0; cutxx = radius*2
-						if cuty<0: cuty=0; cutyy = radius*2
+						if cutx<0: 
+							cutx=0
+						if cutxx>frame.shape[1]: 
+							cutxx = frame.shape[1]
+						if cuty<0: 
+							cuty=0
+						if cutyy>frame.shape[0]: 
+							cutyy = frame.shape[0]
 
 						gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
 						small 		 = gray[cuty:cutyy, cutx:cutxx].copy()
-						small_masked = cv2.bitwise_and(circular_mask, small)
+
+						circular_mask = np.zeros( (cutyy-cuty, cutxx-cutx), dtype=np.uint8 )
+						cv2.circle(circular_mask, (cutyy-cuty, cutxx-cutx), radius, 255, -1 )
+
+						small_masked = cv2.bitwise_and(small, small, circular_mask)
 
 						if type(last_image[dataset_index]) is not np.ndarray: 
 							last_image[dataset_index]  	  = small_masked
